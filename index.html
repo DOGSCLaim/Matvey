@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Отзывы о Матвее</title>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js" defer onerror="window.__supabaseLoadFailed=true"></script>
 <style>
   :root{
     --black: #07090a;
@@ -191,7 +191,7 @@
 <header>
   <div class="avatar-wrap"><img src="avatar.jpg" alt="Матвей"></div>
   <h1>Отзывы о <span>Матвее</span></h1>
-  <p class="subtitle">Просит себя трахнуть , но это для него нормально</p>
+  <p class="subtitle">Просит себя трахнуть , но это нормально</p>
   <div class="stats">
     <div class="stat"><div class="num" id="statCount">0</div><div class="lbl">Отзывов</div></div>
     <div class="stat"><div class="num" id="statAvg">—</div><div class="lbl">Рейтинг</div></div>
@@ -243,6 +243,8 @@
 <footer>Страница отзывов · хранение локально в вашем браузере</footer>
 
 <script>
+document.addEventListener('DOMContentLoaded', function(){
+
   // ====== НАСТРОЙКА БАЗЫ ДАННЫХ (Supabase) ======
   // Вставьте сюда данные вашего проекта Supabase, чтобы отзывы были общими для всех.
   // Если оставить пустым — сайт будет работать локально (localStorage), отзывы видны только вам.
@@ -255,13 +257,19 @@
   let supabase = null;
   let useSupabase = false;
 
-  if (SUPABASE_URL && SUPABASE_KEY && window.supabase) {
-    supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-    useSupabase = true;
-  } else {
-    document.addEventListener('DOMContentLoaded', ()=>{
-      document.getElementById('configBanner').style.display = 'block';
-    });
+  try{
+    if (SUPABASE_URL && SUPABASE_KEY && window.supabase && typeof window.supabase.createClient === 'function') {
+      supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+      useSupabase = true;
+    }
+  } catch(e){
+    console.error('Supabase init failed:', e);
+    useSupabase = false;
+  }
+
+  if(!useSupabase){
+    const banner = document.getElementById('configBanner');
+    if(banner) banner.style.display = 'block';
   }
 
   // ---------- локальное хранилище (fallback) ----------
@@ -420,6 +428,8 @@
 
   renderStars();
   renderReviews();
+
+}); // конец DOMContentLoaded
 </script>
 </body>
-</html>
+      </html>
