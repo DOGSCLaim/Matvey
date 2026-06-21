@@ -250,9 +250,13 @@ document.addEventListener('DOMContentLoaded', function(){
   // Если оставить пустым — сайт будет работать локально (localStorage), отзывы видны только вам.
   const SUPABASE_URL = 'https://pwinlxrgrxqojntufdrb.supabase.co';   // например: 'https://abcdefgh.supabase.co'
   const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB3aW5seHJncnhxb2pudHVmZHJiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIwNjE0NTUsImV4cCI6MjA5NzYzNzQ1NX0.B070ejnUE7G-v_QyIzSguBDmI-tpvhbwfCiDKD6mnbU';   // anon public key из настроек проекта
+
+  // Уникальный идентификатор ЭТОГО сайта. Если делаешь несколько сайтов на одной
+  // базе Supabase — у каждого должен быть свой SITE_ID, иначе отзывы перемешаются.
+  const SITE_ID = 'matvey';
   // ================================================
 
-  const STORAGE_KEY = 'matvey_reviews_v1';
+  const STORAGE_KEY = 'reviews_' + SITE_ID;
   let rating = 0;
   let supabase = null;
   let useSupabase = false;
@@ -273,29 +277,56 @@ document.addEventListener('DOMContentLoaded', function(){
   }
 
   // ---------- локальное хранилище (fallback) ----------
+  let memoryList = null; // запасной вариант в памяти, если localStorage недоступен
+  let localStorageBroken = false;
+
   function loadLocal(){
-    try{ return JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; }
-    catch(e){ return []; }
+    if(localStorageBroken){
+      return memoryList || [];
+    }
+    try{
+      return JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
+    } catch(e){
+      console.warn('localStorage недоступен, переключаюсь на память:', e);
+      localStorageBroken = true;
+      return memoryList || [];
+    }
   }
   function saveLocal(list){
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+    if(localStorageBroken){
+      memoryList = list;
+      return;
+    }
+    try{
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+    } catch(e){
+      console.warn('localStorage недоступен, переключаюсь на память:', e);
+      localStorageBroken = true;
+      memoryList = list;
+    }
   }
 
   // ---------- получить отзывы ----------
   async function fetchReviews(){
     if(useSupabase){
-      const { data, error } = await supabase
-        .from('reviews')
-        .select('*')
-        .order('created_at', { ascending: false });
-      if(error){ console.error(error); return []; }
-      return data.map(r => ({
-        id: r.id,
-        name: r.name,
-        text: r.text,
-        rating: r.rating,
-        date: r.created_at
-      }));
+      try{
+        const { data, error } = await supabase
+          .from('reviews')
+          .select('*')
+          .eq('site_id', SITE_ID)
+          .order('created_at', { ascending: false });
+        if(error){ console.error('Supabase select error:', error); return []; }
+        return data.map(r => ({
+          id: r.id,
+          name: r.name,
+          text: r.text,
+          rating: r.rating,
+          date: r.created_at
+        }));
+      } catch(e){
+        console.error('Supabase fetch failed:', e);
+        return [];
+      }
     } else {
       return loadLocal();
     }
@@ -306,8 +337,11 @@ document.addEventListener('DOMContentLoaded', function(){
     if(useSupabase){
       const { error } = await supabase
         .from('reviews')
-        .insert([{ name, text, rating }]);
-      if(error){ console.error(error); throw error; }
+        .insert([{ site_id: SITE_ID, name, text, rating }]);
+      if(error){
+        console.error('Supabase insert error:', error);
+        throw new Error(error.message || 'Ошибка базы данных');
+      }
     } else {
       const list = loadLocal();
       list.push({ id: Date.now(), name, text, rating, date: new Date().toISOString() });
@@ -357,7 +391,8 @@ document.addEventListener('DOMContentLoaded', function(){
       renderStars();
       await renderReviews();
     } catch(e){
-      errorMsg.textContent = 'Не удалось сохранить отзыв. Попробуйте позже.';
+      console.error('Ошибка при сохранении отзыва:', e);
+      errorMsg.textContent = 'Не удалось сохранить отзыв: ' + (e && e.message ? e.message : 'неизвестная ошибка');
       errorMsg.style.display = 'block';
     } finally {
       btn.disabled = false;
@@ -432,4 +467,4 @@ document.addEventListener('DOMContentLoaded', function(){
 }); // конец DOMContentLoaded
 </script>
 </body>
-      </html>
+</html>
